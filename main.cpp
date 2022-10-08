@@ -10,8 +10,8 @@ void msg_waiting() {
     cout << "Sublime Text for Windows, loading...\n" << endl;
     system("timeout /t 5 /nobreak");
 
-	  system("cls");
-	  cout << "Paying $99 for a license is stupid.\n" << endl;
+    system("cls");
+    cout << "Paying $99 for a license is stupid.\n" << endl;
     system("timeout /t 5");
 
 }
@@ -19,7 +19,7 @@ void msg_waiting() {
 void msg_end() {
 
     system("cls");
-	  cout << "Thank you for using. Made by Blue.\n" << endl;
+    cout << "Thank you for using. Made by Blue.\n" << endl;
 
 }
 
@@ -56,7 +56,7 @@ void patch_sublime4126() {
 
     msg_waiting();
     msg_end();
-	  system("PAUSE");
+    system("PAUSE");
 
 }
 
@@ -93,13 +93,13 @@ void patch_sublime4134 () {
 
     msg_waiting();
     msg_end();
-	  system("PAUSE");
+    system("PAUSE");
 
 }
 
 int main () {
 
-	  int option = 0;
+    int option = 0;
     int optionsublime = 0;
     int optionmerge = 0;
 
