@@ -10,3 +10,7 @@ A way to use Sublime Text without paying $99
 - Enjoy the registered Sublime Text 4.
 
 ![image](https://user-images.githubusercontent.com/60958064/194717867-6ffc856f-e32e-4a8d-a0e0-e93325c55e9a.png)
+
+# Disclaimer
+
+This is purely intended for education and I against the idea of using this for the purpose of pirating Sublime Text. You should pay for a license to support Sublime HQ.
