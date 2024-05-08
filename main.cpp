@@ -1,128 +1,267 @@
+#include <Windows.h>
+
+#include <algorithm>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
-#include <cstdio>
-using namespace std;
+#include <map>
+#include <string>
+#include <vector>
 
-#define _WIN64
-
-void msg_waiting() {
-
+void clean() {
+#ifdef _WIN32
     system("cls");
-    cout << "Sublime Text for Windows, loading...\n" << endl;
-    system("timeout /t 5 /nobreak");
+#else
+    system("clear");
+#endif
+}
 
-    system("cls");
-    cout << "Paying $99 for a license is stupid.\n" << endl;
+bool IsElevated() {
+    bool isElevated = false;
+    HANDLE hToken = nullptr;
+
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+        TOKEN_ELEVATION
+        elevation;
+        DWORD cbSize = sizeof(TOKEN_ELEVATION);
+
+        if (GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &cbSize)) {
+            isElevated = elevation.TokenIsElevated;
+        }
+    }
+
+    if (hToken) {
+        CloseHandle(hToken);
+    }
+
+    return isElevated;
+}
+
+void msgEnd() {
+    std::cout << "\nPaying $99 for a license is stupid!\n" << std::endl;
     system("timeout /t 5");
-
+    clean();
+    std::cout << "Thank you for using. Made by @b1uedev" << std::endl;
+    system("pause");
+    exit(0);
 }
 
-void msg_end() {
+/// Checks if sublime_text.exe is in the directory.
+bool sublimeTextInDir(const std::string& sublime_path) {
+    std::fstream file(sublime_path, std::ios::in | std::ios::out | std::ios::binary);
+    if (!file.is_open()) {
+        return false;
+    }
 
-    system("cls");
-    cout << "Thank you for using. Made by Blue.\n" << endl;
-
+    return true;
 }
 
-void patch_sublime4126() {
+void sublimePatch(const std::string& version, const std::string& sublime_path) {
+    std::fstream file(sublime_path, std::ios::in | std::ios::out | std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error in opening sublime_text.exe\nMake sure that you have permission, and the path is correct or Sublime Text is closed."
+                  << std::endl;
+        system("pause");
+        exit(1);
+    }
 
-    system("COPY \"C:\\Program Files\\Sublime Text\\sublime_text.exe\" ");
+    struct OffsetData {
+        unsigned long offset;
+        std::vector<unsigned char> original_bytes;
+        std::vector<unsigned char> modified_bytes;
+    };
 
-    char m1[] = "\x48\x31\xC0\xC3";
-    char m2[] = "\x90\x90\x90\x90\x90";
-    char m3[] = "\x48\x31\xC0\x48\xFF\xC0\xC3";
-    char m4[] = "\xC3";
+    std::vector<OffsetData> offsets;
+    if (version == "4126") {
+        offsets = {
+            {0x000A7214, {0x55, 0x41, 0x57, 0x41}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000A8D53, {0x55, 0x56, 0x57, 0x48, 0x83, 0xEC, 0x30}, {0x48, 0x31, 0xC0, 0x48, 0xFF, 0xC0, 0xC3}},
+            {0x000A6F0F, {0x55, 0x56, 0x57, 0x48}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x0000711A, {0xE8, 0xE1, 0x36, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x00007133, {0xE8, 0xC8, 0x36, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+        };
+    } else if (version == "4143") {
+        offsets = {
+            {0x000A9864, {0x55, 0x41, 0x57, 0x41}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000AB682, {0x55, 0x56, 0x57, 0x48, 0x83, 0xEC, 0x30}, {0x48, 0x31, 0xC0, 0x48, 0xFF, 0xC0, 0xC3}},
+            {0x000A940F, {0x55, 0x56, 0x57, 0x48}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000071FE, {0xE8, 0x71, 0x8B, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x00007217, {0xE8, 0x58, 0x8B, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+        };
+    } else if (version == "4152") {
+        offsets = {
+            {0x000A8D78, {0x55, 0x41, 0x57, 0x41}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000AAB3E, {0x55, 0x56, 0x57, 0x48, 0x83, 0xEC, 0x30}, {0x48, 0x31, 0xC0, 0x48, 0xFF, 0xC0, 0xC3}},
+            {0x000A8945, {0x55, 0x56, 0x57, 0x48}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000071D0, {0xE8, 0x17, 0xFE, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x000071E9, {0xE8, 0xFE, 0xFD, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+        };
+    } else if (version == "4169") {
+        offsets = {
+            {0x000A0DBC, {0x55, 0x41, 0x57, 0x41}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x000A2B52, {0x55, 0x56, 0x57, 0x48, 0x83, 0xEC, 0x30}, {0x48, 0x31, 0xC0, 0x48, 0xFF, 0xC0, 0xC3}},
+            {0x000A0983, {0x55, 0x56, 0x57, 0x48}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x0000647C, {0xE8, 0x93, 0x58, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x00006495, {0xE8, 0x7A, 0x58, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+        };
+    }
 
-    FILE *crack = fopen("sublime_text.exe", "r+b");
-    fseek(crack, 0x000A7214, SEEK_SET);
-    fwrite(m1, sizeof(m1[0]), 4, crack);
+    for (const auto& offset : offsets) {
+        file.seekp(offset.offset, std::ios::beg);
+        std::vector<unsigned char> read_bytes(offset.original_bytes.size());
+        file.read(reinterpret_cast<char*>(read_bytes.data()), offset.original_bytes.size());
 
-    fseek( crack, 0x0000711A, SEEK_SET );
-    fwrite(m2, sizeof(m2[0]), 5, crack);
+        if (read_bytes == offset.original_bytes) {
+            std::cout << "Offset: 0x" << std::hex << offset.offset << std::endl;
+            std::cout << "Original Data:";
+            for (unsigned char byte : read_bytes) {
+                std::cout << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+            }
+            std::cout << std::endl;
 
-    fseek( crack, 0x00007133, SEEK_SET );
-    fwrite(m2, sizeof(m2[0]), 5, crack);
+            file.seekp(offset.offset, std::ios::beg);
+            file.write(reinterpret_cast<const char*>(offset.modified_bytes.data()), offset.modified_bytes.size());
 
-    fseek( crack, 0x000A8D53, SEEK_SET );
-    fwrite(m3, sizeof(m3[0]), 7, crack);
+            std::cout << "Modified Data:";
+            for (unsigned char byte : offset.modified_bytes) {
+                std::cout << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+            }
+            std::cout << std::endl;
+        }
+    }
 
-    fseek( crack, 0x000A6F0F, SEEK_SET );
-    fwrite(m4, sizeof(m4[0]), 1, crack);
+    file.close();
 
-    fseek( crack, 0x00000400, SEEK_SET );
-    fwrite(m4, sizeof(m4[0]), 1, crack);
-    fclose(crack);
-
-    system("MOVE sublime_text.exe \"C:\\Program Files\\Sublime Text\" ");
-
-    msg_waiting();
-    msg_end();
-    system("PAUSE");
-
+    msgEnd();
 }
 
-void patch_sublime4134 () {
-
-    system("COPY \"C:\\Program Files\\Sublime Text\\sublime_text.exe\" ");
-
-    char m1[] = "\x48\x31\xC0\xC3";
-    char m2[] = "\x90\x90\x90\x90\x90";
-    char m3[] = "\x48\x31\xC0\x48\xFF\xC0\xC3";
-    char m4[] = "\xC3";
-
-    FILE *crack = fopen("sublime_text.exe", "r+b");
-    fseek(crack, 0x000A8484, SEEK_SET);
-    fwrite(m1, sizeof(m1[0]), 4, crack);
-
-    fseek(crack, 0x0000715E, SEEK_SET);
-    fwrite(m2, sizeof(m2[0]), 5, crack);
-
-    fseek(crack, 0x00007177, SEEK_SET);
-    fwrite(m2, sizeof(m2[0]), 5, crack);
-
-    fseek(crack, 0x000AA26A, SEEK_SET);
-    fwrite(m3, sizeof(m3[0]), 7, crack);
-
-    fseek(crack, 0x000A807F, SEEK_SET);
-    fwrite(m4, sizeof(m4[0]), 1, crack);
-
-    fseek(crack, 0x00000400, SEEK_SET);
-    fwrite(m4, sizeof(m4[0]), 1, crack);
-    fclose(crack);
-
-    system("MOVE sublime_text.exe \"C:\\Program Files\\Sublime Text\" ");
-
-    msg_waiting();
-    msg_end();
-    system("PAUSE");
-
+std::string toLowercase(const std::string& str) {
+    std::string lowerStr = str;
+    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    return lowerStr;
 }
 
-int main () {
+int main(int argc, char* argv[]) {
+    /// Needs to run as administrator.
+    if (!IsElevated()) {
+        std::cout << "You have to run this program as Administrator." << std::endl;
+        system("PAUSE");
+        return 1;
+    }
+
+    /// Get the Sublime Text path.
+    std::string sublime_path = "C:\\Program Files\\Sublime Text\\sublime_text.exe";
+    if (!sublimeTextInDir(sublime_path)) {
+        std::cout << "Enter your Sublime Text path: ";
+        std::getline(std::cin, sublime_path);
+    }
 
     int option = 0;
-    int optionsublime = 0;
-    int optionmerge = 0;
+    std::cout << "Sublime Text Crack by @b1uedev.\n" << std::endl;
 
-    cout << "Sublime Text Crack by Blue.\n" << endl;
-    cout << "Please choose your Sublime Text version.\n\n1. Sublime Text version 4126\n2. Sublime Text version 4134\n3. Exit\n";
-    cout << "\nYour choice: ";
-    cin >> option;
+    std::map<std::string, std::string> versionMap = {
+        {toLowercase("924C781AC4FCD21A2B46C73B07D7BC27"), "4126"},
+        {toLowercase("654F4259E066F90F4964E695CF808AD0"), "4143"},
+        {toLowercase("15BB398D5663B89A44372EF15F70A46F"), "4152"},
+        {toLowercase("5B3C8CEA0FCA4323F0E8A994209042A8"), "4169"},
+    };
+
+    for (const auto& entry : versionMap) {
+        std::string hash = entry.first;
+        std::string version = entry.second;
+        std::string command =
+            "cmd /c certutil -hashfile \"" + sublime_path  + "\" md5 | find /i \"" + hash + "\" || exit";
+        LPSTR lpCommandLine = const_cast<char*>(command.c_str());
+
+        SECURITY_ATTRIBUTES saAttr = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        HANDLE
+        hChildStdoutRd, hChildStdoutWr;
+
+        if (!CreatePipe(&hChildStdoutRd, &hChildStdoutWr, &saAttr, 0)) {
+            std::cerr << "Error creating pipe." << std::endl;
+            return 1;
+        }
+
+        STARTUPINFO
+        si = {sizeof(STARTUPINFO)};
+        PROCESS_INFORMATION
+        pi;
+
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdOutput = hChildStdoutWr;
+        si.hStdError = hChildStdoutWr;
+
+        if (CreateProcess(nullptr, lpCommandLine, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi)) {
+            CloseHandle(hChildStdoutWr);
+
+            char buf[1024];
+            DWORD
+            bytesRead;
+            std::string result;
+            while (ReadFile(hChildStdoutRd, buf, sizeof(buf), &bytesRead, nullptr) && bytesRead > 0) {
+                result.append(buf, bytesRead);
+            }
+
+            CloseHandle(hChildStdoutRd);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+
+            std::string processedHashString = toLowercase(result);
+            processedHashString.erase(std::remove_if(processedHashString.begin(), processedHashString.end(), ::isspace),
+                                      processedHashString.end());
+
+            if (entry.first == processedHashString) {
+                std::cout << "You have version " << entry.second << " installed.\nPress 1 to patch and activate.\nPress 0 to quit."
+                          << std::endl;
+                std::cin >> option;
+
+                switch (option) {
+                case 1:
+                    sublimePatch(entry.second, sublime_path);
+                case 0:
+                    system("PAUSE");
+                    exit(0);
+                default:
+                    std::cout << "Invalid input." << std::endl;
+                    system("PAUSE");
+                    exit(1);
+                }
+
+                return 0;
+            }
+        }
+    }
+
+    std::cout << "Please choose your Sublime Text version:" << std::endl;
+    std::cout << "1. Sublime Text version 4126" << std::endl;
+    std::cout << "2. Sublime Text version 4143" << std::endl;
+    std::cout << "3. Sublime Text version 4152" << std::endl;
+    std::cout << "4. Sublime Text version 4169" << std::endl;
+    std::cout << "0. Exit" << std::endl;
+    std::cout << "\nYour choice: ";
+    std::cin >> option;
 
     switch (option) {
     case 1:
-        patch_sublime4126();
+        sublimePatch("4126", sublime_path);
         break;
     case 2:
-        patch_sublime4134();
+        sublimePatch("4143", sublime_path);
         break;
     case 3:
+        sublimePatch("4152", sublime_path);
+        break;
+    case 4:
+        sublimePatch("4169", sublime_path);
+        break;
+    case 0:
         system("PAUSE");
         break;
     default:
-        cout << "Invalid input." << endl;
-        break;
+        std::cout << "Invalid input." << std::endl;
     }
 
     return 0;
-
 }
