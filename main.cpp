@@ -104,6 +104,14 @@ void sublimePatch(const std::string& version, const std::string& sublime_path) {
             {0x0000647C, {0xE8, 0x93, 0x58, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
             {0x00006495, {0xE8, 0x7A, 0x58, 0x20, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
         };
+    } else if (version == "4192") {
+        offsets = {
+            {0x00080355, {0x41, 0x57, 0x41, 0x56}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x00004DFA, {0xE8, 0x21, 0xDC, 0x1A, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x00004E13, {0xE8, 0x08, 0xDC, 0x1A, 0x00}, {0x90, 0x90, 0x90, 0x90, 0x90}},
+            {0x00080023, {0x41, 0x57, 0x41, 0x56}, {0x48, 0x31, 0xC0, 0xC3}},
+            {0x00081B12, {0x56, 0x57, 0x53, 0x48, 0x83, 0xEC, 0x20}, {0x48, 0x31, 0xC0, 0x48, 0xFF, 0xC0, 0xC3}},
+        };
     }
 
     for (const auto& offset : offsets) {
@@ -166,6 +174,7 @@ int main(int argc, char* argv[]) {
         {toLowercase("654F4259E066F90F4964E695CF808AD0"), "4143"},
         {toLowercase("15BB398D5663B89A44372EF15F70A46F"), "4152"},
         {toLowercase("5B3C8CEA0FCA4323F0E8A994209042A8"), "4169"},
+        {toLowercase("3874916e032eeffede48b6dad4dd7f3c"), "4192"}
     };
 
     for (const auto& entry : versionMap) {
@@ -239,6 +248,7 @@ int main(int argc, char* argv[]) {
     std::cout << "2. Sublime Text version 4143" << std::endl;
     std::cout << "3. Sublime Text version 4152" << std::endl;
     std::cout << "4. Sublime Text version 4169" << std::endl;
+    std::cout << "5. Sublime Text version 4192" << std::endl;
     std::cout << "0. Exit" << std::endl;
     std::cout << "\nYour choice: ";
     std::cin >> option;
@@ -255,6 +265,9 @@ int main(int argc, char* argv[]) {
         break;
     case 4:
         sublimePatch("4169", sublime_path);
+        break;
+    case 5:
+        sublimePatch("4192", sublime_path);
         break;
     case 0:
         system("PAUSE");
