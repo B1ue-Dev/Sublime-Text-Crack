@@ -34,12 +34,12 @@ struct DetectedPatch {
 unsigned long resolve_ref(const std::vector<uint8_t>& data, int match_offset, const PatchSignature& sig) {
     if (sig.ref == "call" || sig.ref == "jmp") {
         int instr_offset = match_offset + sig.offset;
-        if (instr_offset + 5 > data.size()) return instr_offset;
+        if (static_cast<size_t>(instr_offset) + 5 > data.size()) return instr_offset;
         int32_t rel = *reinterpret_cast<const int32_t*>(&data[instr_offset + 1]);
         return static_cast<unsigned long>(instr_offset + 5 + rel);
     } else if (sig.ref == "lea") {
         int instr_offset = match_offset + sig.offset;
-        if (instr_offset + 7 > data.size()) return instr_offset;
+        if (static_cast<size_t>(instr_offset) + 7 > data.size()) return instr_offset;
         int32_t rel = *reinterpret_cast<const int32_t*>(&data[instr_offset + 3]);
         return static_cast<unsigned long>(instr_offset + 7 + rel);
     }
@@ -104,7 +104,6 @@ std::vector<DetectedPatch> detect_patches(const std::string& filename) {
 
     std::vector<DetectedPatch> detected;
     for (const auto& patch : patch_defs) {
-        bool found = false;
         for (const auto& sig : patch.signatures) {
             auto pattern = parse_signature(sig.sig_str);
             auto matches = find_all_signatures(data, pattern);
@@ -115,7 +114,6 @@ std::vector<DetectedPatch> detect_patches(const std::string& filename) {
                 std::vector<uint8_t> orig(data.begin() + patch_offset, data.begin() + patch_offset + patch.patch_bytes.size());
                 if (orig != patch.patch_bytes) {
                     detected.push_back({ patch_offset, orig, patch.patch_bytes, patch.name });
-                    found = true;
                     break;
                 }
             }
@@ -200,7 +198,7 @@ bool sublimeTextInDir(const std::string& sublime_path) {
 }
 
 
-int main(int argc, char* argv[]) {
+int main() {
     /// Needs to run as administrator.
     if (!IsElevated()) {
         std::cout << "You have to run this program as Administrator." << std::endl;
@@ -208,11 +206,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    bool auto_path = true;
+
     /// Get the Sublime Text path.
     std::string sublime_path = "C:\\Program Files\\Sublime Text\\sublime_text.exe";
     if (!sublimeTextInDir(sublime_path)) {
         std::cout << "Enter your Sublime Text path: ";
         std::getline(std::cin, sublime_path);
+        sublime_path.erase(std::remove(sublime_path.begin(), sublime_path.end(), '\"'), sublime_path.end());
+        auto_path = false;
     }
 
     int option = 0;
@@ -225,7 +227,10 @@ int main(int argc, char* argv[]) {
         std::string hash = entry.first;
         std::string version = entry.second;
         command = "cmd /c certutil -hashfile \"" + sublime_path  + "\" md5 | find /i \"" + hash + "\" || exit";
-        LPSTR lpCommandLine = const_cast<char*>(command.c_str());
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+        std::wstring wcommand(wlen, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &wcommand[0], wlen);
+        LPWSTR lpCommandLine = &wcommand[0];
 
         SECURITY_ATTRIBUTES saAttr = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
         HANDLE hChildStdoutRd, hChildStdoutWr;
@@ -235,14 +240,15 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        STARTUPINFO si = {sizeof(STARTUPINFO)};
+        STARTUPINFOW si = {};
+        si.cb = sizeof(STARTUPINFOW);
         PROCESS_INFORMATION pi;
 
         si.dwFlags = STARTF_USESTDHANDLES;
         si.hStdOutput = hChildStdoutWr;
         si.hStdError = hChildStdoutWr;
 
-        if (CreateProcess(nullptr, lpCommandLine, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi)) {
+        if (CreateProcessW(nullptr, lpCommandLine, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi)) {
             CloseHandle(hChildStdoutWr);
 
             char buf[1024];
@@ -268,7 +274,10 @@ int main(int argc, char* argv[]) {
     }
 
     if (hash_found) {
-        std::cout << "You have version " << detected_version << " installed.\nPress 1 to patch and activate.\nPress 0 to quit." << std::endl;
+        std::cout << "You have version " << detected_version << " installed." << std::endl;
+        std::cout << "Press 1 to patch and activate." << std::endl;
+        if (auto_path) std::cout << "Press 2 to manually patch a Sublime Text path." << std::endl;
+        std::cout << "Press 0 to quit." << std::endl;
     } else {
         std::cout << "[WARNING] Could not verify original file by MD5 hash.\n";
         std::string version = detect_sublime_version(sublime_path);
@@ -283,11 +292,72 @@ int main(int argc, char* argv[]) {
     std::cin >> option;
     switch (option) {
     case 1: {
-        auto detected = detect_patches(sublime_path);
-        if (detected.empty()) {
-            std::cout << "No patches detected." << std::endl;
+        std::fstream file(sublime_path, std::ios::in | std::ios::out | std::ios::binary);
+        if (!file.is_open()) {
+            std::cout << "\nError: Could not open file for writing. Have you closed Sublime Text entirely?\n" << std::endl;
+            system("pause");
+            break;
         } else {
-            std::fstream file(sublime_path, std::ios::in | std::ios::out | std::ios::binary);
+        auto detected = detect_patches(sublime_path);
+            if (detected.empty()) {
+                std::cout << "\nNo patches detected. Is your Sublime Text newly installed?\n" << std::endl;
+                system("pause");
+                break;
+            }
+            for (const auto& dp : detected) {
+                file.seekg(dp.offset, std::ios::beg);
+                std::vector<unsigned char> read_bytes(dp.original_bytes.size());
+                file.read(reinterpret_cast<char*>(read_bytes.data()), dp.original_bytes.size());
+
+                if (read_bytes == dp.original_bytes) {
+                    std::cout << "Offset: 0x" << std::hex << dp.offset <<  " - " << dp.name << std::endl;
+                    std::cout << "Original Data:";
+                    for (unsigned char byte : read_bytes) {
+                        std::cout << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+                    }
+                    std::cout << std::endl;
+
+                    file.seekp(dp.offset, std::ios::beg);
+                    file.write(reinterpret_cast<const char*>(dp.patch_bytes.data()), dp.patch_bytes.size());
+                    file.flush();
+
+                    std::cout << "Modified Data:";
+                    for (unsigned char byte : dp.patch_bytes) {
+                        std::cout << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+                    }
+                    std::cout << std::endl;
+                }
+            }
+            file.close();
+        }
+        msgEnd();
+        break;
+    }
+    case 2: {
+        std::string custom_path;
+        std::cout << "Enter the full path to your Sublime Text executable: ";
+        std::cin.ignore();
+        std::getline(std::cin, custom_path);
+        custom_path.erase(std::remove(custom_path.begin(), custom_path.end(), '\"'), custom_path.end());
+
+        if (!sublimeTextInDir(custom_path)) {
+            std::cout << "\nError: Could not open file. Please check the path and try again. Make sure Sublime Text is not running.\n" << std::endl;
+            system("pause");
+            break;
+        }
+
+        std::fstream file(custom_path, std::ios::in | std::ios::out | std::ios::binary);
+        if (!file.is_open()) {
+            std::cout << "\nError: Could not open file for writing. Have you closed Sublime Text entirely?\n" << std::endl;
+            system("pause");
+            break;
+        } else {
+            auto detected = detect_patches(custom_path);
+            if (detected.empty()) {
+                std::cout << "\nNo patches detected. Is your Sublime Text newly installed?\n" << std::endl;
+                system("pause");
+                break;
+            }
             for (const auto& dp : detected) {
                 file.seekg(dp.offset, std::ios::beg);
                 std::vector<unsigned char> read_bytes(dp.original_bytes.size());
